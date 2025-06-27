@@ -1,0 +1,18 @@
+[project]
+name = "evidence"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Veatec22",email = "wazagiel@outlook.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb (>=1.3.1,<2.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
