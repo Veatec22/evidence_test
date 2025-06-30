@@ -30,12 +30,13 @@ jobs:
           BASE_PATH: '/${{ github.event.repository.name }}'
 
           # Your BigQuery Service Account credentials.
-          # These must match the secret names you create in your repository settings.
+          # These are not secrets and are needed for the connection
           EVIDENCE_SOURCE__spoti__authenticator: service-account
           EVIDENCE_SOURCE__spoti__location: EU
-          EVIDENCE_SOURCE__spoti__PROJECT_ID: ${{ secrets.EVIDENCE_SOURCE__SPOTI__PROJECT_ID }}
-          EVIDENCE_SOURCE__spoti__CLIENT_EMAIL: ${{ secrets.EVIDENCE_SOURCE__SPOTI__CLIENT_EMAIL }}
-          EVIDENCE_SOURCE__spoti__PRIVATE_KEY: ${{ secrets.EVIDENCE_SOURCE__SPOTI__PRIVATE_KEY }}
+          # These are parsed from the single GCP_CREDENTIALS secret
+          EVIDENCE_SOURCE__spoti__PROJECT_ID: ${{ fromJson(secrets.GCP_CREDENTIALS).project_id }}
+          EVIDENCE_SOURCE__spoti__CLIENT_EMAIL: ${{ fromJson(secrets.GCP_CREDENTIALS).client_email }}
+          EVIDENCE_SOURCE__spoti__PRIVATE_KEY: ${{ fromJson(secrets.GCP_CREDENTIALS).private_key }}
 
         run: |
           npm run sources
