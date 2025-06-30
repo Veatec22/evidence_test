@@ -15,6 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
@@ -28,17 +34,7 @@ jobs:
         env:
           # This automatically uses your repo name to set the base path
           BASE_PATH: '/${{ github.event.repository.name }}'
-          
-          # Load the secret into an intermediary env var
-          GCP_SA_KEY: ${{ secrets.GCP_CREDENTIALS }}
-          
-          # Tell the Google Cloud client library where to find the credentials file
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-credentials.json
         run: |
-          # Write the credentials from the env var into the file.
-          # The double quotes are critical to preserve the multi-line JSON structure.
-          echo "$GCP_SA_KEY" > $GOOGLE_APPLICATION_CREDENTIALS
-          
           npm run sources
           npm run build
 
