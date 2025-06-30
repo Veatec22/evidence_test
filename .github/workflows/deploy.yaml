@@ -31,9 +31,9 @@ jobs:
 
           # Your BigQuery Service Account credentials.
           # These must match the secret names you create in your repository settings.
-          EVIDENCE_SOURCE__BIGQUERY_SOURCE__PROJECT_ID: ${{ secrets.EVIDENCE_SOURCE__SPOTI__PROJECT_ID }}
-          EVIDENCE_SOURCE__BIGQUERY_SOURCE__CLIENT_EMAIL: ${{ secrets.EVIDENCE_SOURCE__SPOTI__CLIENT_EMAIL }}
-          EVIDENCE_SOURCE__BIGQUERY_SOURCE__PRIVATE_KEY: ${{ secrets.EVIDENCE_SOURCE__SPOTI__PRIVATE_KEY }}
+          EVIDENCE_SOURCE__spoti__PROJECT_ID: ${{ secrets.EVIDENCE_SOURCE__SPOTI__PROJECT_ID }}
+          EVIDENCE_SOURCE__spoti__CLIENT_EMAIL: ${{ secrets.EVIDENCE_SOURCE__SPOTI__CLIENT_EMAIL }}
+          EVIDENCE_SOURCE__spoti__PRIVATE_KEY: ${{ secrets.EVIDENCE_SOURCE__SPOTI__PRIVATE_KEY }}
 
         run: |
           npm run sources

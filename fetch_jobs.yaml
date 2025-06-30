@@ -1,5 +1,0 @@
-jobs:
-  - name: iris_data
-    source_url: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv
-    destination: sources/iris.duckdb
-    table: iris
