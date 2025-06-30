@@ -117,3 +117,23 @@ CI/CD	GitHub Actions	Auto-run pipeline, push reports, update storage
     Example GCS setup with DVC remote?
 
 Let me know what you'd like next!
+
+
+```
+npm install
+npm run sources
+npm run dev
+```
+
+
+zalety:
+- totalny version control - wszystko w repo. nie trzeba widoków w bq (chyba), dashobard jest w markdown (vs tableau brak historii)
+- praca w gitlabie - praca w cursorze = ogromny potencjał na poprawę wydajności. z czasem + dokumentacjami LLM mógłby pykać wszystkie raporty praktycznie sam
+- Dowolność w wyglądzie raportu - połowa dokumentacji to opis elementów frontendowych. do przetestowania, ale wygląda jakby z tego można było robić od dashobardów po artykuły
+- SQL heavy - coś w czym team jest najlepszy. Pola kalkulowane same sie będą pisać
+- redukcja kosztów - odchodzi na
+- mega wydajne - do potwierdzenia, ale z opisu wynika że ten silnik jest bardzo dobry (duckdb na pewno jest mocny)
+
+wady:
+- całkowicie nowe spojrzenie na BI - na pewno w dużym stopniu nieintuicyjne. zamiast UI w którym przerzucasz kafelki, musisz pisać i patrzeć w kod.
+- deployment & access - wielka niewiadoma. z listy kompatybilnych deploymentów to chyba tylko cloudflare pages sie zgadza. to sprawdzenia z devopsami, ale to jest chyba ta bramka która mamy np. do bistro,parkingu, whatifa. nawet jeśli by to działało, pizganie się z devopsami on daily basis brzmi jak udręka. potencjalnie musieliby nadać jakiś access administracyjny bo inaczej kicha w chuj
