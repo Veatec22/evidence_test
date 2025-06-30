@@ -34,6 +34,9 @@ jobs:
         env:
           # This automatically uses your repo name to set the base path
           BASE_PATH: '/${{ github.event.repository.name }}'
+          # Provide the non-secret options to guide Evidence
+          EVIDENCE_SOURCE__spoti__authenticator: service-account
+          EVIDENCE_SOURCE__spoti__location: EU
         run: |
           npm run sources
           npm run build
