@@ -28,17 +28,12 @@ jobs:
         env:
           # This automatically uses your repo name to set the base path
           BASE_PATH: '/${{ github.event.repository.name }}'
-
-          # Your BigQuery Service Account credentials.
-          # These are not secrets and are needed for the connection
-          EVIDENCE_SOURCE__spoti__authenticator: service-account
-          EVIDENCE_SOURCE__spoti__location: EU
-          # These are parsed from the single GCP_CREDENTIALS secret
-          EVIDENCE_SOURCE__spoti__PROJECT_ID: ${{ fromJson(secrets.GCP_CREDENTIALS).project_id }}
-          EVIDENCE_SOURCE__spoti__CLIENT_EMAIL: ${{ fromJson(secrets.GCP_CREDENTIALS).client_email }}
-          EVIDENCE_SOURCE__spoti__PRIVATE_KEY: ${{ fromJson(secrets.GCP_CREDENTIALS).private_key }}
-
+          
+          # Tell the Google Cloud client library where to find the credentials file
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-credentials.json
         run: |
+          # Write the credentials from the secret into the file
+          echo '${{ secrets.GCP_CREDENTIALS }}' > $GOOGLE_APPLICATION_CREDENTIALS
           npm run sources
           npm run build
 
