@@ -1,28 +1,27 @@
 ---
-title: IMDB Movies 2025+
-description: Analysis of IMDB movie data from 2025 onwards
+title: IMDB Movies
+description: Analysis of IMDB movie data from this year.
 queries:
-  - imdb.sql
+  - movies.sql
 ---
 
 ```sql total_movies
-SELECT COUNT(*) as total_count
-FROM imdb
-```
-
-```sql movies_by_year
-SELECT start_year, COUNT(*) as movie_count
-FROM imdb
-GROUP BY start_year
-ORDER BY start_year
+SELECT 
+  COUNT(*) AS total_count,
+  COUNT(DISTINCT genres) AS unique_genres,
+  SUM(runtime_minutes) AS total_runtime_minutes,
+  AVG(runtime_minutes) AS average_runtime_minutes,
+  SUM(num_votes) AS total_votes,
+  AVG(average_rating) AS average_rating
+FROM movies
 ```
 
 ```sql genre_analysis
 SELECT 
-  TRIM(genre) as genre_name,
-  COUNT(*) as count
-FROM imdb,
-UNNEST(SPLIT(genres, ',')) as genre
+  TRIM(genre) AS genre_name,
+  COUNT(*) AS count
+FROM movies,
+UNNEST(SPLIT(genres, ',')) AS genre
 WHERE genre IS NOT NULL AND TRIM(genre) != ''
 GROUP BY genre_name
 ORDER BY count DESC
@@ -30,25 +29,28 @@ LIMIT 15
 ```
 
 ```sql movies_table
-SELECT primary_title, start_year, genres
-FROM imdb
-ORDER BY start_year DESC, primary_title
+SELECT primary_title, runtime_minutes, genres, average_rating, num_votes
+FROM movies
 LIMIT 100
 ```
 
 ```sql yearly_genre_breakdown
 SELECT 
-  start_year,
-  TRIM(genre) as genre_name,
-  COUNT(*) as count
-FROM imdb,
-UNNEST(SPLIT(genres, ',')) as genre
+  TRIM(genre) AS genre_name,
+  COUNT(*) AS count
+FROM movies,
+UNNEST(SPLIT(genres, ',')) AS genre
 WHERE genre IS NOT NULL AND TRIM(genre) != ''
-GROUP BY start_year, genre_name
-ORDER BY start_year, count DESC
+GROUP BY ALL
+ORDER BY count DESC
 ```
 
 <BigValue data={total_movies} value=total_count description="Total Movies from 2025+" />
+<BigValue data={total_movies} value=unique_genres description="Unique Genres" />
+<BigValue data={total_movies} value=total_runtime_minutes description="Total Runtime Minutes" />
+<BigValue data={total_movies} value=average_runtime_minutes description="Average Runtime Minutes" />
+<BigValue data={total_movies} value=total_votes description="Total Votes" />
+<BigValue data={total_movies} value=average_rating description="Average Rating" />
 
 ## Movie Industry Analysis (2025+)
 
@@ -57,13 +59,6 @@ This analysis examines upcoming and recently released movies from 2025 onwards, 
 <Tabs fullWidth=true>
     <Tab label="Overview Charts">
         <Grid cols=2>
-          <BarChart 
-            data={movies_by_year} 
-            title="Movies by Release Year" 
-            x="start_year" 
-            y="movie_count"
-            legend=false
-          />
 
           <BarChart 
             data={genre_analysis} 
@@ -80,7 +75,7 @@ This analysis examines upcoming and recently released movies from 2025 onwards, 
         <BarChart 
           data={yearly_genre_breakdown} 
           title="Genre Distribution by Year" 
-          x="start_year" 
+          x="genre_name" 
           y="count" 
           series="genre_name"
           legend=true
