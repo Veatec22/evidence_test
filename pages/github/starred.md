@@ -2,7 +2,7 @@
 title: Starred GitHub Repositories
 description: Analysis of my starred GitHub repositories with insights on languages, activity, and trends.
 queries:
-  - starred_repos.sql
+  - starred.sql
 ---
 
 ```sql total_stats
@@ -15,7 +15,7 @@ SELECT
   COUNT(CASE WHEN archived = true THEN 1 END) AS archived_repos,
   COUNT(CASE WHEN fork = true THEN 1 END) AS forked_repos,
   COUNT(CASE WHEN last_release != 'No releases' THEN 1 END) AS repos_with_releases
-FROM starred_repos
+FROM github.github_data_starred
 ```
 
 ```sql language_breakdown
@@ -26,7 +26,7 @@ SELECT
   SUM(stars) AS total_stars,
   AVG(forks) AS avg_forks,
   COUNT(CASE WHEN last_release != 'No releases' THEN 1 END) AS with_releases
-FROM starred_repos
+FROM github.github_data_starred
 WHERE language IS NOT NULL AND language != 'Unknown'
 GROUP BY language
 ORDER BY repo_count DESC
@@ -42,7 +42,7 @@ SELECT
   language,
   last_release,
   url
-FROM starred_repos
+FROM github.github_data_starred
 ORDER BY stars DESC
 LIMIT 20
 ```
@@ -56,7 +56,7 @@ SELECT
   updated_at,
   pushed_at,
   url
-FROM starred_repos
+FROM github.github_data_starred
 WHERE pushed_at IS NOT NULL 
   AND pushed_at != ''
 ORDER BY pushed_at DESC
@@ -68,7 +68,7 @@ SELECT
   TRIM(topic.value) AS topic_name,
   COUNT(*) AS repo_count,
   AVG(stars) AS avg_stars
-FROM starred_repos,
+FROM github.github_data_starred,
 UNNEST(SPLIT(topics, ',')) AS topic
 WHERE topics IS NOT NULL 
   AND topics != ''
@@ -87,7 +87,7 @@ SELECT
   END AS release_status,
   COUNT(*) AS repo_count,
   AVG(stars) AS avg_stars
-FROM starred_repos
+FROM github.github_data_starred
 GROUP BY release_status
 ```
 
@@ -96,7 +96,7 @@ SELECT
   DATE_TRUNC('month', CAST(created_at AS DATE)) AS month,
   COUNT(*) AS repos_starred,
   SUM(stars) AS total_stars_gained
-FROM starred_repos
+FROM github.github_data_starred
 WHERE created_at IS NOT NULL
 GROUP BY month
 ORDER BY month DESC
@@ -246,9 +246,3 @@ This dashboard provides insights into your starred GitHub repositories, helping 
 - <Value data={total_stats} column=repos_with_releases /> repositories have published releases
 - <Value data={total_stats} column=archived_repos /> repositories are archived
 - <Value data={total_stats} column=forked_repos /> are forks of other repositories
-
-**Last Updated:** <Value data={starred_repos} column=fetched_at row=0 />
-
----
-
-*This report is automatically updated daily via GitHub Actions. Data includes repository metadata, activity status, topics, and release information.*

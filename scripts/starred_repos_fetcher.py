@@ -14,42 +14,30 @@ import pandas as pd
 import gspread
 from gspread_dataframe import set_with_dataframe
 from oauth2client.service_account import ServiceAccountCredentials
+from dotenv import load_dotenv
 
 
 # === CONFIGURATION ===
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
-GOOGLE_CREDENTIALS_JSON = os.getenv('GOOGLE_CREDENTIALS_JSON', '')
-GOOGLE_SHEET_NAME = os.getenv('GOOGLE_SHEET_NAME', 'StarredRepos')
+load_dotenv()
+GHUB_TOKEN = os.getenv('GHUB_TOKEN')
+GCP_CREDENTIALS = os.getenv('GCP_CREDENTIALS')
+GOOGLE_SHEET_NAME = os.getenv('GOOGLE_SHEET_NAME')
+GOOGLE_SHEET_ID = os.getenv('GOOGLE_SHEET_ID')
 
 # GitHub API endpoints
 API_STARRED_URL = 'https://api.github.com/user/starred'
 API_RELEASES_URL = 'https://api.github.com/repos/{owner}/{repo}/releases/latest'
 API_TOPICS_URL = 'https://api.github.com/repos/{owner}/{repo}/topics'
 
-# === HEADERS ===
 auth_headers = {
-    'Authorization': f'token {GITHUB_TOKEN}',
+    'Authorization': f'token {GHUB_TOKEN}',
     'Accept': 'application/vnd.github.v3+json'
 }
 
 topics_headers = {
-    'Authorization': f'token {GITHUB_TOKEN}',
+    'Authorization': f'token {GHUB_TOKEN}',
     'Accept': 'application/vnd.github.mercy-preview+json'  # Needed to access topics
 }
-
-
-def validate_config():
-    """Validate required environment variables"""
-    if not GITHUB_TOKEN:
-        print("Error: GITHUB_TOKEN environment variable is required")
-        sys.exit(1)
-    
-    if not GOOGLE_CREDENTIALS_JSON:
-        print("Error: GOOGLE_CREDENTIALS_JSON environment variable is required")
-        sys.exit(1)
-    
-    print("✅ Configuration validated")
-
 
 def get_starred_repos():
     """Fetch all starred repositories from GitHub API"""
@@ -137,8 +125,7 @@ def process_repositories(repos):
             'fetched_at': datetime.now().isoformat()
         })
 
-        # Respect GitHub API rate limits
-        time.sleep(0.5)
+        time.sleep(0.1)
 
     print(f"✅ Processed {len(data)} repositories")
     return pd.DataFrame(data)
@@ -153,12 +140,12 @@ def upload_to_google_sheet(df, sheet_name=GOOGLE_SHEET_NAME):
     
     try:
         # Load credentials from environment variable (JSON string)
-        if GOOGLE_CREDENTIALS_JSON.startswith('{'):
+        if GCP_CREDENTIALS.startswith('{'):
             # JSON string
-            creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+            creds_dict = json.loads(GCP_CREDENTIALS)
         else:
             # File path
-            with open(GOOGLE_CREDENTIALS_JSON, 'r') as f:
+            with open(GCP_CREDENTIALS, 'r') as f:
                 creds_dict = json.load(f)
         
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -172,10 +159,7 @@ def upload_to_google_sheet(df, sheet_name=GOOGLE_SHEET_NAME):
             print(f"📝 Created new spreadsheet: {sheet_name}")
 
         # Use the first worksheet or create it
-        try:
-            worksheet = sheet.worksheet("Sheet1")
-        except gspread.exceptions.WorksheetNotFound:
-            worksheet = sheet.add_worksheet(title="Sheet1", rows="1000", cols="20")
+        worksheet = sheet.worksheet("starred")
 
         # Clear the sheet and upload new data
         worksheet.clear()
@@ -187,7 +171,7 @@ def upload_to_google_sheet(df, sheet_name=GOOGLE_SHEET_NAME):
         return sheet.id
         
     except Exception as e:
-        print(f"❌ Error uploading to Google Sheet: {str(e)}")
+        print(f"❌ Error uploading to Google Sheet: {type(e).__name__}: {e.args}")
         raise
 
 
@@ -195,9 +179,6 @@ def main():
     """Main execution function"""
     print("🚀 Starting starred repositories sync...")
     print(f"⏰ Started at: {datetime.now().isoformat()}")
-    
-    # Validate configuration
-    validate_config()
     
     try:
         # Fetch starred repositories

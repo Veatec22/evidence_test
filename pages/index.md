@@ -16,7 +16,8 @@ This Evidence app demonstrates data analysis capabilities across multiple source
 - [Music Analytics](./spoti/) - Spotify listening data and insights
 
 ### ⭐ GitHub Repository Analysis
-- [Starred Repositories](./github/starred-repos) - Analysis of your starred GitHub repositories with insights on languages, activity, and trends
+- [Starred Repositories](./github_data/starred) - Analysis of your starred GitHub repositories with insights on languages, activity, and trends
+- [Recommended Repositories](./github_data/recommendations) - Analysis of your recommended GitHub repositories with insights on languages, activity, and trends
 
 ---
 

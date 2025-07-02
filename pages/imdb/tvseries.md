@@ -1,6 +1,6 @@
 ---
-title: IMDB Movies
-description: Analysis of IMDB movie data from this year.
+title: IMDB tv series
+description: Analysis of IMDB tv series data from this year.
 queries:
-  - movies.sql
+  - tvseries.sql
 ---

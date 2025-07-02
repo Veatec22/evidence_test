@@ -15,5 +15,5 @@ SELECT
     archived,
     fork,
     fetched_at
-FROM github_starred.StarredRepos_Sheet1
+FROM github.github_data_starred
 ORDER BY stars DESC

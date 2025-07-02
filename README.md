@@ -1,7 +1,7 @@
-You're on the right track, and what you’re describing is a modern, reproducible, cost-aware data analytics pipeline. Let's refine and structure it step-by-step to ensure it's robust, automatable, and production-ready.
+You're on the right track, and what you're describing is a modern, reproducible, cost-aware data analytics pipeline. Let's refine and structure it step-by-step to ensure it's robust, automatable, and production-ready.
 🧠 Your High-Level Plan (Refined)
 
-Here’s your concept, revised into a clean, reliable pipeline:
+Here's your concept, revised into a clean, reliable pipeline:
 1. Daily Extraction: BigQuery → Parquet or DuckDB
 
     Run daily query jobs to extract data from BigQuery
@@ -118,12 +118,25 @@ CI/CD	GitHub Actions	Auto-run pipeline, push reports, update storage
 
 Let me know what you'd like next!
 
-
-```
 npm install
 npm run sources
 npm run dev
 ```
+
+### Running Repository Recommendations
+
+To generate repository recommendations based on your starred repos and upload them to your Google Sheet, run the following command:
+
+```bash
+python scripts/repo_recommender.py
+```
+
+This script will:
+1. Read your starred repositories from the "starred" sheet in your configured Google Sheet.
+2. Analyze your preferred topics and languages.
+3. Search GitHub for similar repositories with at least 1000 stars.
+4. Score and sort these recommendations.
+5. Write the results to a new sheet named "recommendations" in the same Google Sheet workbook.
 
 
 zalety:
@@ -137,3 +150,4 @@ zalety:
 wady:
 - całkowicie nowe spojrzenie na BI - na pewno w dużym stopniu nieintuicyjne. zamiast UI w którym przerzucasz kafelki, musisz pisać i patrzeć w kod.
 - deployment & access - wielka niewiadoma. z listy kompatybilnych deploymentów to chyba tylko cloudflare pages sie zgadza. to sprawdzenia z devopsami, ale to jest chyba ta bramka która mamy np. do bistro,parkingu, whatifa. nawet jeśli by to działało, pizganie się z devopsami on daily basis brzmi jak udręka. potencjalnie musieliby nadać jakiś access administracyjny bo inaczej kicha w chuj
+
