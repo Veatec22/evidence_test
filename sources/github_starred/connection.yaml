@@ -1,0 +1,5 @@
+name: github_starred
+type: gsheets
+options: {}
+sheets:
+  StarredRepos: "YOUR_GOOGLE_SHEET_ID_HERE"
