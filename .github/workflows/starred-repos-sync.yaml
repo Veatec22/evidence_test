@@ -26,8 +26,8 @@ jobs:
 
       - name: Run starred repos sync
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GHUB_TOKEN: ${{ secrets.GHUB_TOKEN }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
           GOOGLE_SHEET_NAME: ${{ vars.GOOGLE_SHEET_NAME || 'StarredRepos' }}
         run: |
           python scripts/starred_repos_fetcher.py
