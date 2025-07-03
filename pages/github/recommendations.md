@@ -14,7 +14,6 @@ SELECT
   language,
   url,
   topics,
-  score
 FROM github.github_data_recommendations
 ```
 
