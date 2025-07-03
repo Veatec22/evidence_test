@@ -19,14 +19,16 @@ FROM github.github_data_lists
 
 ```sql tag_breakdown
 SELECT 
-  TRIM(tag.value) AS tag_name,
+  TRIM(tag_value) AS tag_name,
   COUNT(*) AS repo_count,
   AVG(stars) AS avg_stars,
   SUM(stars) AS total_stars,
   COUNT(DISTINCT language) AS languages_count
-FROM github.github_data_lists,
-UNNEST(SPLIT(tags, ', ')) AS tag
-WHERE tags IS NOT NULL AND tags != ''
+FROM (
+  SELECT *, UNNEST(string_split(tags, ', ')) AS tag_value
+  FROM github.github_data_lists
+  WHERE tags IS NOT NULL AND tags != ''
+)
 GROUP BY tag_name
 ORDER BY repo_count DESC
 ```
@@ -34,15 +36,17 @@ ORDER BY repo_count DESC
 ```sql language_by_tags
 SELECT 
   language,
-  TRIM(tag.value) AS tag_name,
+  tag_value AS tag_name,
   COUNT(*) AS repo_count,
   AVG(stars) AS avg_stars
-FROM github.github_data_lists,
-UNNEST(SPLIT(tags, ', ')) AS tag
-WHERE language IS NOT NULL 
-  AND language != '' 
-  AND tags IS NOT NULL 
-  AND tags != ''
+FROM (
+  SELECT *, UNNEST(string_split(tags, ', ')) AS tag_value
+  FROM github.github_data_lists
+  WHERE language IS NOT NULL 
+    AND language != '' 
+    AND tags IS NOT NULL 
+    AND tags != ''
+)
 GROUP BY language, tag_name
 ORDER BY repo_count DESC
 LIMIT 20
@@ -100,7 +104,6 @@ SELECT
   url
 FROM github.github_data_lists
 WHERE updated_at IS NOT NULL 
-  AND updated_at != ''
 ORDER BY updated_at DESC
 LIMIT 10
 ```
