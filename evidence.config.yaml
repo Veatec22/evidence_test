@@ -67,6 +67,7 @@ plugins:
     "@evidence-dev/csv": { }
     "@evidence-dev/duckdb": { }
     "@evidence-dev/connector-gsheets": { }
+    "@evidence-dev/connector-motherduck": { }
     
 
   deployment:
