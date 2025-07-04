@@ -2,58 +2,90 @@
 GitHub Repository Recommender
 Recommends GitHub repositories based on user's starred repositories topics.
 Optimized for speed and relevance.
+Now uses MotherDuck (cloud DuckDB) for data storage.
 '''
 
 import os
 import sys
 import time
-import json
+import duckdb
 import requests
 import pandas as pd
-import gspread
-from gspread_dataframe import set_with_dataframe, get_as_dataframe
-from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
 from collections import Counter
+from tqdm import tqdm
 
-# === CONFIGURATION ===
+# Import our lists configuration for ignore list
+from lists_config import GITHUB_LISTS
+
 load_dotenv()
 GHUB_TOKEN = os.getenv('GHUB_TOKEN')
-GCP_CREDENTIALS = os.getenv('GCP_CREDENTIALS')
-GOOGLE_SHEET_NAME = os.getenv('GOOGLE_SHEET_NAME')
-GOOGLE_SHEET_ID = os.getenv('GOOGLE_SHEET_ID')
+MOTHERDUCK_TOKEN = os.getenv('MOTHERDUCK_TOKEN')
+MOTHERDUCK_DB = os.getenv('MOTHERDUCK_DB')
 
 auth_headers = {
     'Authorization': f'token {GHUB_TOKEN}',
     'Accept': 'application/vnd.github.v3+json'
 }
 
-
-def get_starred_repos_from_sheet(worksheet_name='starred'):
-    """Read starred repositories from Google Sheet"""
-    print(f"📊 Reading starred repositories from Google Sheet (ID: {GOOGLE_SHEET_ID})")
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+def get_motherduck_connection():
+    """Get connection to MotherDuck"""
     try:
-        if GCP_CREDENTIALS.startswith('{'):
-            creds_dict = json.loads(GCP_CREDENTIALS)
+        if MOTHERDUCK_TOKEN:
+            connection_string = f'md:{MOTHERDUCK_DB}?motherduck_token={MOTHERDUCK_TOKEN}'
         else:
-            with open(GCP_CREDENTIALS, 'r') as f:
-                creds_dict = json.load(f)
+            # Use browser-based authentication
+            connection_string = f'md:{MOTHERDUCK_DB}'
         
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
+        conn = duckdb.connect(connection_string)
+        print(f"✅ Connected to MotherDuck database: {MOTHERDUCK_DB}")
+        return conn
+    except Exception as e:
+        print(f"❌ Error connecting to MotherDuck: {e}")
+        raise
+
+def get_starred_repos_from_motherduck():
+    """Read starred repositories from MotherDuck"""
+    print(f"📊 Reading starred repositories from MotherDuck")
+    
+    try:
+        conn = get_motherduck_connection()
         
-        sheet = client.open_by_key(GOOGLE_SHEET_ID)
-        worksheet = sheet.worksheet(worksheet_name)
+        # Get starred repositories data
+        query = "SELECT * FROM starred"
+        df = conn.execute(query).df()
         
-        df = get_as_dataframe(worksheet)
-        print(f"✅ Read {len(df)} rows from {worksheet_name} sheet")
+        conn.close()
+        
+        print(f"✅ Read {len(df)} rows from starred table")
         return df
         
     except Exception as e:
-        print(f"❌ Error reading from Google Sheet: {type(e).__name__}: {e.args}")
+        print(f"❌ Error reading from MotherDuck: {type(e).__name__}: {e}")
         raise
 
+def get_ignore_repos():
+    """Get the list of repositories to ignore from the ignore list"""
+    print("🚫 Getting ignore list...")
+    
+    try:
+        # Import the scraper function from starred_fetcher
+        from starred_fetcher import scrape_github_list
+        
+        ignore_config = GITHUB_LISTS.get('ignore')
+        if not ignore_config:
+            print("⚠️ No ignore list found in configuration")
+            return set()
+        
+        ignore_repos = scrape_github_list(ignore_config['url'], 'ignore')
+        ignore_set = set(ignore_repos)
+        
+        print(f"🚫 Found {len(ignore_set)} repositories to ignore")
+        return ignore_set
+        
+    except Exception as e:
+        print(f"❌ Error getting ignore list: {e}")
+        return set()
 
 def extract_topic_frequencies(df_starred):
     """Extract and count topic frequencies from starred repositories"""
@@ -63,17 +95,14 @@ def extract_topic_frequencies(df_starred):
     starred_repo_full_names = set()
     
     for _, row in df_starred.iterrows():
-        # Collect starred repo full names for filtering (owner/repo format)
         if pd.notna(row.get('name')):
             starred_repo_full_names.add(row['name'])
         
-        # Extract topics
         topics_str = row.get('topics', '')
         if pd.notna(topics_str) and topics_str.strip():
             topics = [t.strip().lower() for t in topics_str.split(',') if t.strip()]
             all_topics.extend(topics)
     
-    # Count topic frequencies
     topic_counter = Counter(all_topics)
     
     print(f"📈 Found {len(topic_counter)} unique topics from {len(df_starred)} starred repos")
@@ -82,7 +111,6 @@ def extract_topic_frequencies(df_starred):
         print(f"  • {topic}: {count} repos")
     
     return topic_counter, starred_repo_full_names
-
 
 def search_repositories_by_topic(topic, min_stars=1000, max_results=50):
     """Search GitHub repositories by a specific topic"""
@@ -117,9 +145,7 @@ def search_repositories_by_topic(topic, min_stars=1000, max_results=50):
                 break
                 
             repositories.extend(items)
-            print(f"  📦 Page {page}: {len(items)} repos (total: {len(repositories)})")
             
-            # Stop if we have enough results
             if len(repositories) >= max_results:
                 repositories = repositories[:max_results]
                 break
@@ -131,34 +157,32 @@ def search_repositories_by_topic(topic, min_stars=1000, max_results=50):
             print(f"❌ Error searching for topic '{topic}': {e}")
             break
     
-    print(f"✅ Found {len(repositories)} repositories for topic '{topic}'")
     return repositories
 
-
-def get_recommendations(topic_counter, starred_repo_full_names, min_stars=1000, max_per_topic=50):
+def get_recommendations(topic_counter, starred_repo_full_names, ignore_repos, min_stars=1000, max_per_topic=50):
     """Get repository recommendations based on topic frequencies"""
     print("🎯 Generating recommendations based on topic analysis...")
     
     all_recommendations = {}
     filtered_count = 0
+    ignored_count = 0
     
-    # Process topics in order of frequency (most common first)
-    for topic, frequency in topic_counter.most_common():
-        print(f"\n--- Processing topic: '{topic}' (appears in {frequency} starred repos) ---")
-        
+    for topic, frequency in tqdm(topic_counter.most_common(), desc="Processing topics"):
+
         repos = search_repositories_by_topic(topic, min_stars, max_per_topic)
         
         for repo in repos:
             repo_id = repo['id']
-            repo_full_name = repo['full_name']  # This is "owner/repo" format
+            repo_full_name = repo['full_name']
             
-            # Skip if already starred (check against full_name)
             if repo_full_name in starred_repo_full_names:
                 filtered_count += 1
-                print(f"  🔄 Skipping already starred: {repo_full_name}")
                 continue
             
-            # If we haven't seen this repo before, add it
+            if repo_full_name in ignore_repos:
+                ignored_count += 1
+                continue
+            
             if repo_id not in all_recommendations:
                 all_recommendations[repo_id] = {
                     'repo_data': repo,
@@ -166,14 +190,13 @@ def get_recommendations(topic_counter, starred_repo_full_names, min_stars=1000, 
                     'total_frequency': 0
                 }
             
-            # Add this topic match
             all_recommendations[repo_id]['topic_matches'].append(topic)
             all_recommendations[repo_id]['total_frequency'] += frequency
     
-    print(f"\n✅ Found {len(all_recommendations)} unique unstarred repositories")
+    print(f"\n✅ Found {len(all_recommendations)} unique recommendations")
     print(f"🔄 Filtered out {filtered_count} already-starred repositories")
+    print(f"🚫 Filtered out {ignored_count} ignored repositories")
     return all_recommendations
-
 
 def format_recommendations(recommendations_dict):
     """Format recommendations into a DataFrame sorted by relevance and stars"""
@@ -201,7 +224,6 @@ def format_recommendations(recommendations_dict):
     
     df = pd.DataFrame(formatted_recommendations)
     
-    # Sort by topic frequency score (descending) and then by stars (descending)
     df = df.sort_values(['topic_frequency_score', 'stars'], ascending=[False, False])
     
     print(f"🏆 Top 10 recommendations:")
@@ -211,80 +233,64 @@ def format_recommendations(recommendations_dict):
     
     return df
 
-
-def upload_recommendations_to_google_sheet(df, worksheet_name='recommendations'):
-    """Upload DataFrame to Google Sheets"""
-    print(f"📤 Uploading recommendations to Google Sheet (ID: {GOOGLE_SHEET_ID}) ({worksheet_name})")
-    
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+def upload_recommendations_to_motherduck(df, table_name='recommendations'):
+    """Upload DataFrame to MotherDuck"""
+    print(f"📤 Uploading recommendations to MotherDuck: {table_name}")
     
     try:
-        if GCP_CREDENTIALS.startswith('{'):
-            creds_dict = json.loads(GCP_CREDENTIALS)
-        else:
-            with open(GCP_CREDENTIALS, 'r') as f:
-                creds_dict = json.load(f)
+        conn = get_motherduck_connection()
         
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
+        conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+        conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
         
-        sheet = client.open_by_key(GOOGLE_SHEET_ID)
-
-        try:
-            worksheet = sheet.worksheet(worksheet_name)
-        except gspread.WorksheetNotFound:
-            worksheet = sheet.add_worksheet(worksheet_name, rows="1", cols="1")
-            print(f"📝 Created new worksheet: {worksheet_name}")
-
-        worksheet.clear()
-        set_with_dataframe(worksheet, df)
+        result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+        row_count = result[0]
         
-        print(f"✅ Uploaded {len(df)} rows to Google Sheet: {GOOGLE_SHEET_ID} ({worksheet_name})")
+        print(f"✅ Uploaded {row_count} rows to MotherDuck table: {table_name}")
+        
+        conn.close()
+        return True
         
     except Exception as e:
-        print(f"❌ Error uploading to Google Sheet: {type(e).__name__}: {e.args}")
+        print(f"❌ Error uploading to MotherDuck: {type(e).__name__}: {e}")
         raise
-
 
 def main():
     """Main execution function"""
-    print("🚀 Starting optimized repository recommendation sync...")
+    print("🚀 Starting optimized repository recommendation sync with MotherDuck...")
     
     try:
-        # Read starred repositories from Google Sheet
-        df_starred = get_starred_repos_from_sheet()
+        df_starred = get_starred_repos_from_motherduck()
         
         if df_starred.empty:
-            print("⚠️ No starred repositories found in sheet. Cannot generate recommendations.")
+            print("⚠️ No starred repositories found in MotherDuck. Cannot generate recommendations.")
             return
         
-        # Extract topic frequencies and starred repo names
+        ignore_repos = get_ignore_repos()
+        
         topic_counter, starred_repo_full_names = extract_topic_frequencies(df_starred)
         
         if not topic_counter:
             print("⚠️ No topics found in starred repositories. Cannot generate recommendations.")
             return
         
-        # Get recommendations based on topics
-        recommendations_dict = get_recommendations(topic_counter, starred_repo_full_names)
+        recommendations_dict = get_recommendations(topic_counter, starred_repo_full_names, ignore_repos)
         
         if not recommendations_dict:
             print("⚠️ No recommendations found.")
             return
         
-        # Format and sort recommendations
         df_recommendations = format_recommendations(recommendations_dict)
         
-        # Upload recommendations to Google Sheet
-        upload_recommendations_to_google_sheet(df_recommendations)
+        upload_recommendations_to_motherduck(df_recommendations)
         
         print("🎉 Successfully generated and uploaded repository recommendations!")
         print(f"📈 Generated {len(df_recommendations)} recommendations based on {len(topic_counter)} topics")
+        print(f"🚫 Ignored {len(ignore_repos)} repositories from ignore list")
         
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         sys.exit(1)
-
 
 if __name__ == '__main__':
     main() 

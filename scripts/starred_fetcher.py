@@ -3,20 +3,18 @@
 Unified Starred GitHub Repositories Fetcher
 Fetches starred repositories from GitHub API and merges with curated list tags
 Creates a comprehensive portfolio view combining detailed repo data with tag organization
+Now uses MotherDuck (cloud DuckDB) for data storage
 """
 
 import os
 import sys
 import time
-import json
+import duckdb
 from datetime import datetime
 from collections import defaultdict
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import gspread
-from gspread_dataframe import set_with_dataframe
-from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
 
 # Import our lists configuration  
@@ -25,9 +23,8 @@ from lists_config import GITHUB_LISTS, TAG_NAMES
 # === CONFIGURATION ===
 load_dotenv()
 GHUB_TOKEN = os.getenv('GHUB_TOKEN')
-GCP_CREDENTIALS = os.getenv('GCP_CREDENTIALS')
-GOOGLE_SHEET_NAME = os.getenv('GOOGLE_SHEET_NAME')
-GOOGLE_SHEET_ID = os.getenv('GOOGLE_SHEET_ID')
+MOTHERDUCK_TOKEN = os.getenv('MOTHERDUCK_TOKEN')
+MOTHERDUCK_DB = os.getenv('MOTHERDUCK_DB', 'github')  # Default database name
 
 # GitHub API endpoints
 API_STARRED_URL = 'https://api.github.com/user/starred'
@@ -43,6 +40,22 @@ topics_headers = {
     'Authorization': f'token {GHUB_TOKEN}',
     'Accept': 'application/vnd.github.mercy-preview+json'  # Needed to access topics
 }
+
+def get_motherduck_connection():
+    """Get connection to MotherDuck"""
+    try:
+        if MOTHERDUCK_TOKEN:
+            connection_string = f'md:{MOTHERDUCK_DB}?motherduck_token={MOTHERDUCK_TOKEN}'
+        else:
+            # Use browser-based authentication
+            connection_string = f'md:{MOTHERDUCK_DB}'
+        
+        conn = duckdb.connect(connection_string)
+        print(f"✅ Connected to MotherDuck database: {MOTHERDUCK_DB}")
+        return conn
+    except Exception as e:
+        print(f"❌ Error connecting to MotherDuck: {e}")
+        raise
 
 def get_starred_repos():
     """Fetch all starred repositories from GitHub API"""
@@ -131,28 +144,42 @@ def get_curated_tags():
     """Fetch all curated lists and create a mapping of repo names to tags"""
     print("🏷️ Fetching curated list tags...")
     repo_tags = defaultdict(set)
+    ignore_repos = set()
     
     for tag_name in TAG_NAMES:
         list_config = GITHUB_LISTS[tag_name]
         list_url = list_config['url']
         
         repo_names = scrape_github_list(list_url, tag_name)
-        for repo_name in repo_names:
-            repo_tags[repo_name].add(tag_name)
+        
+        if tag_name == 'ignore':
+            # Special handling for ignore list
+            ignore_repos.update(repo_names)
+            print(f"🚫 Added {len(repo_names)} repositories to ignore list")
+        else:
+            for repo_name in repo_names:
+                repo_tags[repo_name].add(tag_name)
         
         # Be nice to GitHub
         time.sleep(1)
     
     print(f"✅ Collected tags for {len(repo_tags)} repositories")
-    return repo_tags
+    print(f"🚫 Ignoring {len(ignore_repos)} repositories")
+    return repo_tags, ignore_repos
 
-def process_repositories(repos, repo_tags):
+def process_repositories(repos, repo_tags, ignore_repos):
     """Process repositories and gather additional data, merging with curated tags"""
     print("🔄 Processing repositories and gathering additional data...")
     data = []
 
     for i, repo in enumerate(repos):
         full_name = repo['full_name']
+        
+        # Skip ignored repositories
+        if full_name in ignore_repos:
+            print(f"🚫 Skipping ignored repository: {full_name}")
+            continue
+            
         owner, repo_name = full_name.split('/')
         
         print(f"📊 Processing {full_name} ({i+1}/{len(repos)})")
@@ -191,63 +218,36 @@ def process_repositories(repos, repo_tags):
 
         time.sleep(0.1)
 
-    print(f"✅ Processed {len(data)} repositories")
+    print(f"✅ Processed {len(data)} repositories (filtered out {len([r for r in repos if r['full_name'] in ignore_repos])} ignored)")
     return pd.DataFrame(data)
 
-def upload_to_google_sheet(df, sheet_name=GOOGLE_SHEET_NAME, tab_name="starred"):
-    """Upload DataFrame to Google Sheets"""
-    print(f"📤 Uploading to Google Sheet: {sheet_name}, tab: {tab_name}")
-    
-    # Scope for Sheets + Drive
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+def upload_to_motherduck(df, table_name="starred"):
+    """Upload DataFrame to MotherDuck"""
+    print(f"📤 Uploading to MotherDuck: {table_name}")
     
     try:
-        # Validate credentials
-        if not GCP_CREDENTIALS:
-            raise ValueError("GCP_CREDENTIALS environment variable is not set")
+        conn = get_motherduck_connection()
         
-        # Load credentials from environment variable (JSON string)
-        if GCP_CREDENTIALS.startswith('{'):
-            # JSON string
-            creds_dict = json.loads(GCP_CREDENTIALS)
-        else:
-            # File path
-            with open(GCP_CREDENTIALS, 'r') as f:
-                creds_dict = json.load(f)
+        # Create table if it doesn't exist and insert data
+        conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+        conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
         
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
+        # Verify upload
+        result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+        row_count = result[0]
         
-        # Open (or create) spreadsheet
-        try:
-            sheet = client.open(sheet_name)
-        except gspread.SpreadsheetNotFound:
-            sheet = client.create(sheet_name)
-            print(f"📝 Created new spreadsheet: {sheet_name}")
-
-        # Try to get the worksheet, create if it doesn't exist
-        try:
-            worksheet = sheet.worksheet(tab_name)
-        except gspread.WorksheetNotFound:
-            worksheet = sheet.add_worksheet(title=tab_name, rows="1000", cols="25")
-            print(f"📝 Created new worksheet: {tab_name}")
-
-        # Clear the sheet and upload new data
-        worksheet.clear()
-        set_with_dataframe(worksheet, df)
+        print(f"✅ Uploaded {row_count} rows to MotherDuck table: {table_name}")
         
-        print(f"✅ Uploaded {len(df)} rows to Google Sheet: {sheet_name}/{tab_name}")
-        print(f"🔗 Sheet URL: https://docs.google.com/spreadsheets/d/{sheet.id}")
-        
-        return sheet.id
+        conn.close()
+        return True
         
     except Exception as e:
-        print(f"❌ Error uploading to Google Sheet: {type(e).__name__}: {e}")
+        print(f"❌ Error uploading to MotherDuck: {type(e).__name__}: {e}")
         raise
 
 def main():
     """Main execution function"""
-    print("🚀 Starting unified starred repositories sync...")
+    print("🚀 Starting unified starred repositories sync with MotherDuck...")
     print(f"⏰ Started at: {datetime.now().isoformat()}")
     
     try:
@@ -258,14 +258,14 @@ def main():
             print("⚠️ No starred repositories found")
             return
         
-        # Get curated tags from lists
-        repo_tags = get_curated_tags()
+        # Get curated tags from lists and ignore list
+        repo_tags, ignore_repos = get_curated_tags()
         
         # Process repositories with merged data
-        df = process_repositories(repos, repo_tags)
+        df = process_repositories(repos, repo_tags, ignore_repos)
         
-        # Upload to Google Sheets
-        sheet_id = upload_to_google_sheet(df)
+        # Upload to MotherDuck
+        upload_to_motherduck(df)
         
         # Print summary
         curated_count = len(df[df['is_curated'] == True])
@@ -276,17 +276,17 @@ def main():
         print(f"   • Curated repositories: {curated_count}")
         print(f"   • Programming languages: {languages_count}")
         print(f"   • Total stars accumulated: {df['stars'].sum():,}")
+        print(f"   • Ignored repositories: {len(ignore_repos)}")
         
         # Show curated tag distribution
         if curated_count > 0:
             print(f"   • Curated tag distribution:")
-            for tag in TAG_NAMES:
+            for tag in [t for t in TAG_NAMES if t != 'ignore']:
                 tag_count = len(df[df['curated_tags'].str.contains(tag, na=False)])
                 if tag_count > 0:
                     print(f"     - {tag}: {tag_count} repos")
         
-        print(f"\n🎉 Successfully synced unified starred repositories!")
-        print(f"📊 Portfolio data available at: https://docs.google.com/spreadsheets/d/{sheet_id}")
+        print(f"\n🎉 Successfully synced unified starred repositories to MotherDuck!")
         
     except Exception as e:
         print(f"❌ Error: {str(e)}")
