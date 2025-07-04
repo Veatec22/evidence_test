@@ -1,9 +1,5 @@
 # This file was automatically generated
-type: gsheets
 name: github
-options: {}
-# Advanced Options, you probably don't want to change this
-buildOptions:
-  batchSize: 1000000
-sheets:
-   github_data: "1sC--EoeGVjOfcKjeI5U9jL55nN0LhZXD4sepUTqCE20"
+type: motherduck
+options:
+  database: github

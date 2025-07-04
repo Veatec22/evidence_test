@@ -13,15 +13,15 @@ import requests
 import pandas as pd
 from dotenv import load_dotenv
 from collections import Counter
+from tqdm import tqdm
 
 # Import our lists configuration for ignore list
 from lists_config import GITHUB_LISTS
 
-# === CONFIGURATION ===
 load_dotenv()
 GHUB_TOKEN = os.getenv('GHUB_TOKEN')
 MOTHERDUCK_TOKEN = os.getenv('MOTHERDUCK_TOKEN')
-MOTHERDUCK_DB = os.getenv('MOTHERDUCK_DB', 'github')  # Default database name
+MOTHERDUCK_DB = os.getenv('MOTHERDUCK_DB')
 
 auth_headers = {
     'Authorization': f'token {GHUB_TOKEN}',
@@ -95,17 +95,14 @@ def extract_topic_frequencies(df_starred):
     starred_repo_full_names = set()
     
     for _, row in df_starred.iterrows():
-        # Collect starred repo full names for filtering (owner/repo format)
         if pd.notna(row.get('name')):
             starred_repo_full_names.add(row['name'])
         
-        # Extract topics
         topics_str = row.get('topics', '')
         if pd.notna(topics_str) and topics_str.strip():
             topics = [t.strip().lower() for t in topics_str.split(',') if t.strip()]
             all_topics.extend(topics)
     
-    # Count topic frequencies
     topic_counter = Counter(all_topics)
     
     print(f"📈 Found {len(topic_counter)} unique topics from {len(df_starred)} starred repos")
@@ -148,9 +145,7 @@ def search_repositories_by_topic(topic, min_stars=1000, max_results=50):
                 break
                 
             repositories.extend(items)
-            print(f"  📦 Page {page}: {len(items)} repos (total: {len(repositories)})")
             
-            # Stop if we have enough results
             if len(repositories) >= max_results:
                 repositories = repositories[:max_results]
                 break
@@ -162,7 +157,6 @@ def search_repositories_by_topic(topic, min_stars=1000, max_results=50):
             print(f"❌ Error searching for topic '{topic}': {e}")
             break
     
-    print(f"✅ Found {len(repositories)} repositories for topic '{topic}'")
     return repositories
 
 def get_recommendations(topic_counter, starred_repo_full_names, ignore_repos, min_stars=1000, max_per_topic=50):
@@ -173,29 +167,22 @@ def get_recommendations(topic_counter, starred_repo_full_names, ignore_repos, mi
     filtered_count = 0
     ignored_count = 0
     
-    # Process topics in order of frequency (most common first)
-    for topic, frequency in topic_counter.most_common():
-        print(f"\n--- Processing topic: '{topic}' (appears in {frequency} starred repos) ---")
-        
+    for topic, frequency in tqdm(topic_counter.most_common(), desc="Processing topics"):
+
         repos = search_repositories_by_topic(topic, min_stars, max_per_topic)
         
         for repo in repos:
             repo_id = repo['id']
-            repo_full_name = repo['full_name']  # This is "owner/repo" format
+            repo_full_name = repo['full_name']
             
-            # Skip if already starred (check against full_name)
             if repo_full_name in starred_repo_full_names:
                 filtered_count += 1
-                print(f"  🔄 Skipping already starred: {repo_full_name}")
                 continue
             
-            # Skip if in ignore list
             if repo_full_name in ignore_repos:
                 ignored_count += 1
-                print(f"  🚫 Skipping ignored repository: {repo_full_name}")
                 continue
             
-            # If we haven't seen this repo before, add it
             if repo_id not in all_recommendations:
                 all_recommendations[repo_id] = {
                     'repo_data': repo,
@@ -203,7 +190,6 @@ def get_recommendations(topic_counter, starred_repo_full_names, ignore_repos, mi
                     'total_frequency': 0
                 }
             
-            # Add this topic match
             all_recommendations[repo_id]['topic_matches'].append(topic)
             all_recommendations[repo_id]['total_frequency'] += frequency
     
@@ -238,7 +224,6 @@ def format_recommendations(recommendations_dict):
     
     df = pd.DataFrame(formatted_recommendations)
     
-    # Sort by topic frequency score (descending) and then by stars (descending)
     df = df.sort_values(['topic_frequency_score', 'stars'], ascending=[False, False])
     
     print(f"🏆 Top 10 recommendations:")
@@ -255,11 +240,9 @@ def upload_recommendations_to_motherduck(df, table_name='recommendations'):
     try:
         conn = get_motherduck_connection()
         
-        # Create table if it doesn't exist and insert data
         conn.execute(f"DROP TABLE IF EXISTS {table_name}")
         conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
         
-        # Verify upload
         result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
         row_count = result[0]
         
@@ -277,34 +260,28 @@ def main():
     print("🚀 Starting optimized repository recommendation sync with MotherDuck...")
     
     try:
-        # Read starred repositories from MotherDuck
         df_starred = get_starred_repos_from_motherduck()
         
         if df_starred.empty:
             print("⚠️ No starred repositories found in MotherDuck. Cannot generate recommendations.")
             return
         
-        # Get ignore list
         ignore_repos = get_ignore_repos()
         
-        # Extract topic frequencies and starred repo names
         topic_counter, starred_repo_full_names = extract_topic_frequencies(df_starred)
         
         if not topic_counter:
             print("⚠️ No topics found in starred repositories. Cannot generate recommendations.")
             return
         
-        # Get recommendations based on topics
         recommendations_dict = get_recommendations(topic_counter, starred_repo_full_names, ignore_repos)
         
         if not recommendations_dict:
             print("⚠️ No recommendations found.")
             return
         
-        # Format and sort recommendations
         df_recommendations = format_recommendations(recommendations_dict)
         
-        # Upload recommendations to MotherDuck
         upload_recommendations_to_motherduck(df_recommendations)
         
         print("🎉 Successfully generated and uploaded repository recommendations!")

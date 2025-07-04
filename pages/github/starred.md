@@ -17,7 +17,7 @@ SELECT
   COUNT(CASE WHEN fork = true THEN 1 END) AS forked_repos,
   COUNT(CASE WHEN last_release != 'No releases' THEN 1 END) AS active_projects,
   COUNT(DISTINCT CASE WHEN curated_tags != '' THEN curated_tags END) AS tag_combinations
-FROM github.github_data_starred
+FROM github.starred
 ```
 
 ```sql curated_stack_breakdown
@@ -30,7 +30,7 @@ SELECT
   STRING_AGG(DISTINCT language, ', ' ORDER BY language) AS languages_list
 FROM (
   SELECT *, UNNEST(string_split(curated_tags, ', ')) AS tag_value
-  FROM github.github_data_starred
+  FROM github.starred
   WHERE curated_tags IS NOT NULL AND curated_tags != ''
 )
 GROUP BY stack_category
@@ -46,7 +46,7 @@ SELECT
   COUNT(CASE WHEN is_curated = true THEN 1 END) AS curated_count,
   COUNT(CASE WHEN last_release != 'No releases' THEN 1 END) AS active_projects,
   ROUND(AVG(forks), 0) AS avg_forks
-FROM github.github_data_starred
+FROM github.starred
 WHERE language IS NOT NULL AND language != 'Unknown'
 GROUP BY language
 ORDER BY repo_count DESC
@@ -65,7 +65,7 @@ SELECT
   last_release,
   url,
   is_curated
-FROM github.github_data_starred
+FROM github.starred
 ORDER BY stars DESC
 LIMIT 25
 ```
@@ -80,7 +80,7 @@ SELECT
   curated_tags,
   last_release,
   url
-FROM github.github_data_starred
+FROM github.starred
 WHERE curated_tags LIKE '%stack%'
 ORDER BY stars DESC
 LIMIT 15
@@ -95,7 +95,7 @@ SELECT
   curated_tags,
   created_at,
   url
-FROM github.github_data_starred
+FROM github.starred
 WHERE curated_tags LIKE '%future-ideas%'
 ORDER BY stars DESC
 LIMIT 10
@@ -111,7 +111,7 @@ SELECT
   created_at,
   updated_at,
   url
-FROM github.github_data_starred
+FROM github.starred
 WHERE created_at IS NOT NULL
 ORDER BY created_at DESC
 LIMIT 15
@@ -123,7 +123,7 @@ SELECT
   COUNT(*) AS repo_count,
   AVG(stars) AS avg_stars,
   COUNT(CASE WHEN is_curated = true THEN 1 END) AS curated_count
-FROM github.github_data_starred,
+FROM github.starred,
 UNNEST(string_split(topics, ',')) AS topic
 WHERE topics IS NOT NULL 
   AND topics != ''
@@ -143,7 +143,7 @@ SELECT
   COUNT(*) AS repo_count,
   AVG(stars) AS avg_stars,
   COUNT(CASE WHEN is_curated = true THEN 1 END) AS curated_count
-FROM github.github_data_starred
+FROM github.starred
 GROUP BY activity_status
 ```
 
@@ -153,7 +153,7 @@ SELECT
   COUNT(*) AS repos_added,
   COUNT(CASE WHEN is_curated = true THEN 1 END) AS curated_added,
   SUM(stars) AS stars_accumulated
-FROM github.github_data_starred
+FROM github.starred
 WHERE created_at IS NOT NULL
 GROUP BY month
 ORDER BY month DESC

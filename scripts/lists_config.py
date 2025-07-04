@@ -21,8 +21,6 @@ GITHUB_LISTS = {
     
 }
 
-# List of tag names for easy iteration
 TAG_NAMES = list(GITHUB_LISTS.keys())
 
-# Default sheet tab name for the unified starred data
 STARRED_SHEET_TAB = "starred"

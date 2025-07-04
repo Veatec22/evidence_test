@@ -1,4 +1,4 @@
--- Query unified starred repositories data from Google Sheets
+-- Query unified starred repositories data from MotherDuck
 -- Combines all starred repos with detailed GitHub data and curated list tags
 -- This serves as both a portfolio showcase and comprehensive repository analysis
 SELECT 
@@ -21,5 +21,5 @@ SELECT
     archived,
     fork,
     fetched_at
-FROM github.github_data_starred
+FROM starred
 ORDER BY stars DESC
