@@ -1,0 +1,5 @@
+# This file was automatically generated
+name: github_2
+type: motherduck
+options:
+  database: github
