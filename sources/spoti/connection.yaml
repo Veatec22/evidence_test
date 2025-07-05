@@ -1,9 +1,0 @@
-# This file was automatically generated
-type: bigquery
-name: spoti
-options:
-  authenticator: service-account
-  location: EU
-# Advanced Options, you probably don't want to change this
-buildOptions:
-  batchSize: 1000000

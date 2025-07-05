@@ -1,0 +1,4 @@
+bigvalues - portfolio size zostaje, reszta do wywalenia
+wykres slupkowy dla portfolio z podziałem na GITHUB_LISTS_ADDITIONAL (jako filtr)
+Tabela z rekomendacjami (pełna, ale tylko 10 na strone), bez opisu, chyba że sie da jak sie najedzie na wiersz to wtedy tak, najważniejsze żeby była nazwa, gwiazdki oraz link
+przenieś wszystko do index, recommendations i starred do kosza
