@@ -78,5 +78,5 @@ plugins:
     "@evidence-dev/connector-gsheets": { }    
     
 
-  deployment:
-    basePath: /evidence_test
+deployment:
+  basePath: /evidence_test

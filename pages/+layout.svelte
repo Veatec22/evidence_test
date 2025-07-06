@@ -5,6 +5,6 @@
 	export let data;
 </script>
 
-<EvidenceDefaultLayout {data} logo="/logo.png" title="test_title" builtWithEvidence={false} githubRepo="https://github.com/Veatec22/evidence_test" hideBreadcrumbs={true} >
+<EvidenceDefaultLayout {data} logo="static/logo.png" title="Wiktor Żagiel" builtWithEvidence={false} githubRepo="https://github.com/Veatec22/evidence_test" hideBreadcrumbs={true} >
 	<slot slot="content" />
 </EvidenceDefaultLayout>

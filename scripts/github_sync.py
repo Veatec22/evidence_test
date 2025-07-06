@@ -38,8 +38,8 @@ GITHUB_LISTS_ADDITIONAL = [
 
 load_dotenv()
 GHUB_TOKEN = os.getenv('GHUB_TOKEN')
-MOTHERDUCK_TOKEN = os.getenv('MOTHERDUCK_TOKEN')
-MOTHERDUCK_DB = os.getenv('MOTHERDUCK_DB', 'github')
+EVIDENCE_SOURCE__GITHUB__TOKEN = os.getenv('EVIDENCE_SOURCE__GITHUB__TOKEN')
+EVIDENCE_SOURCE__GITHUB__DATABASE = os.getenv('EVIDENCE_SOURCE__GITHUB__DATABASE', 'github')
 
 BASE_LIST_URL = "https://github.com/stars/Veatec22/lists/"
 
@@ -55,9 +55,9 @@ topics_headers = {
 
 def get_motherduck_connection():
     try:
-        conn_str = f"md:{MOTHERDUCK_DB}"
-        if MOTHERDUCK_TOKEN:
-            conn_str += f"?motherduck_token={MOTHERDUCK_TOKEN}"
+        conn_str = f"md:{EVIDENCE_SOURCE__GITHUB__DATABASE}"
+        if EVIDENCE_SOURCE__GITHUB__TOKEN:
+            conn_str += f"?motherduck_token={EVIDENCE_SOURCE__GITHUB__TOKEN}"
         return duckdb.connect(conn_str)
     except Exception as e:
         print(f"❌ Error connecting to MotherDuck: {e}")
@@ -100,7 +100,9 @@ def scrape_github_list(slug):
 
 def get_curated_tags():
     repo_tags = defaultdict(set)
+    additional_tags = defaultdict(set)
     ignore_repos = set()
+
     for slug in tqdm(GITHUB_LISTS, desc="Fetching curated lists"):
         repos = scrape_github_list(slug)
         if slug == "ignore":
@@ -108,8 +110,15 @@ def get_curated_tags():
         else:
             for r in repos:
                 repo_tags[r].add(slug)
-        time.sleep(1)
-    return repo_tags, ignore_repos
+        time.sleep(0.5)
+
+    for slug in tqdm(GITHUB_LISTS_ADDITIONAL, desc="Fetching additional lists"):
+        repos = scrape_github_list(slug)
+        for r in repos:
+            additional_tags[r].add(slug)
+        time.sleep(0.5)
+
+    return repo_tags, additional_tags, ignore_repos
 
 def get_last_release_date(owner, repo):
     url = f'https://api.github.com/repos/{owner}/{repo}/releases/latest'
@@ -125,7 +134,7 @@ def get_repo_topics(owner, repo):
     resp = requests.get(url, headers=topics_headers)
     return resp.json().get('names', []) if resp.status_code == 200 else []
 
-def process_starred_repositories(repos, repo_tags, ignore_repos):
+def process_starred_repositories(repos, repo_tags, additional_tags, ignore_repos):
     data = []
     for repo in tqdm(repos, desc="Processing starred repos"):
         full_name = repo['full_name']
@@ -134,17 +143,19 @@ def process_starred_repositories(repos, repo_tags, ignore_repos):
         owner, repo_name = full_name.split('/')
         last_release = get_last_release_date(owner, repo_name)
         topics = get_repo_topics(owner, repo_name)
-        curated_tags = list(repo_tags.get(full_name, set()))
-        all_tags = topics + curated_tags
+        curated_list_tags = list(repo_tags.get(full_name, set()))
+        additional_list_tags = list(additional_tags.get(full_name, set()))
+        all_tags = topics + curated_list_tags + additional_list_tags
         data.append({
             'name': full_name,
             'stars': repo['stargazers_count'],
             'language': repo.get('language', 'Unknown'),
             'url': repo['html_url'],
             'last_release': last_release,
-            'curated_tags': ", ".join(sorted(curated_tags)),
+            'curated_tags': ", ".join(sorted(curated_list_tags)),
+            'categories': ", ".join(sorted(additional_list_tags)),
             'all_tags': ", ".join(sorted(all_tags)),
-            'is_curated': len(curated_tags) > 0
+            'is_curated': len(curated_list_tags) > 0
         })
         time.sleep(0.1)
     return pd.DataFrame(data)
@@ -202,8 +213,8 @@ def main():
         if not starred:
             print("⚠️ No starred repositories found")
             return
-        repo_tags, ignore_repos = get_curated_tags()
-        starred_df = process_starred_repositories(starred, repo_tags, ignore_repos)
+        repo_tags, additional_tags, ignore_repos = get_curated_tags()
+        starred_df = process_starred_repositories(starred, repo_tags, additional_tags, ignore_repos)
         uploaded = upload_to_motherduck(starred_df, "starred")
         print(f"✅ Uploaded {uploaded} starred repositories")
 
